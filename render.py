@@ -5,104 +5,94 @@ import glm
 import pyassimp
 import numpy
 
-# pygame
-
-pygame.init()
-pygame.display.set_mode((800, 600), pygame.OPENGL | pygame.DOUBLEBUF)
-clock = pygame.time.Clock()
-pygame.key.set_repeat(1, 10)
-
-
-glClearColor(0.18, 0.18, 0.18, 1.0)
-glEnable(GL_DEPTH_TEST)
-glEnable(GL_TEXTURE_2D)
-
-# shaders
-
-vertex_shader = """
-#version 460
-layout (location = 0) in vec4 position;
-layout (location = 1) in vec4 normal;
-layout (location = 2) in vec2 texcoords;
-
-uniform mat4 model;
-uniform mat4 view;
-uniform mat4 projection;
-
-uniform vec4 color;
-uniform vec4 light;
-
-out vec4 vertexColor;
-out vec2 vertexTexcoords;
-
-void main()
-{
-    float intensity = dot(normal, normalize(light - position));
-
-    gl_Position = projection * view * model * position;
-    vertexColor = color * intensity;
-    vertexTexcoords = texcoords;
-}
-
-"""
-
-fragment_shader = """
-#version 460
-layout (location = 0) out vec4 diffuseColor;
-
-in vec4 vertexColor;
-in vec2 vertexTexcoords;
-
-uniform sampler2D tex;
-
-void main()
-{
-    diffuseColor = vertexColor * texture(tex, vertexTexcoords);
-}
-"""
-
-shader = shaders.compileProgram(
-    shaders.compileShader(vertex_shader, GL_VERTEX_SHADER),
-    shaders.compileShader(fragment_shader, GL_FRAGMENT_SHADER),
-)
-glUseProgram(shader)
-
-
-# matrixes
-model = glm.mat4(1)
-view = glm.mat4(1)
-projection = glm.perspective(glm.radians(45), 800/600, 0.1, 1000.0)
-
-glViewport(0, 0, 800, 600)
-
-
-scene = pyassimp.load('./models/OBJ/castle.obj')
-
-
-def glize(node):
-    model = node.transformation.astype(numpy.float32)
-
-    for mesh in node.meshes:
+class Render: 
+    def viewport_dimensions(self): 
+        self.viewport_height = 600
+        self.viewport_width = 800
+    
+    def init_pygame(self): 
+        pygame.init()
+        pygame.display.set_mode(
+            (800, 600), 
+            pygame.OPENGL | pygame.DOUBLEBUF
+        )
+        self.clock = pygame.time.Clock()
+        pygame.key.set_repeat(1, 10)
         
-        texture_surface = pygame.image.load("./models/OBJ/textures/Haus_C.jpg")
-        texture_data = pygame.image.tostring(texture_surface,"RGB",1)
-        width = texture_surface.get_width()
-        height = texture_surface.get_height()
-        texture = glGenTextures(1)
-        glBindTexture(GL_TEXTURE_2D, texture)
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, texture_data)
-        glGenerateMipmap(GL_TEXTURE_2D)
+        glClearColor(0.15, 0.10, 0.20, 1.0)
+        glEnable(GL_DEPTH_TEST)
+        glEnable(GL_TEXTURE_2D)
+        
+    def get_shader(self):
+        self.vertex_shader = open('data/shaders/vertex_shader.shader', 'r').read()
+        self.fragment_shader = open('data/shaders/fragment_shader.shader', 'r').read()
+        self.active_shader = shaders.compileProgram(
+            shaders.compileShader(self.vertex_shader, GL_VERTEX_SHADER),
+            shaders.compileShader(self.fragment_shader, GL_FRAGMENT_SHADER),
+        )
+        glUseProgram(self.active_shader)
 
-        vertex_data = numpy.hstack((
-            numpy.array(mesh.vertices, dtype=numpy.float32),
-            numpy.array(mesh.normals, dtype=numpy.float32),
-            numpy.array(mesh.texturecoords[0], dtype=numpy.float32)
-        ))
-
-        faces = numpy.hstack(
-            numpy.array(mesh.faces, dtype=numpy.int32)
+    def get_matrixes(self): 
+        angle = 45
+        self.model = glm.mat4(1)
+        self.view = glm.mat4(1)
+        self.projection = glm.perspective(
+            glm.radians(angle), 
+            self.viewport_width/self.viewport_height, 
+            0.1, 
+            1000.0
+        )
+        glViewport(
+            0, 
+            0, 
+            self.viewport_width, 
+            self.viewport_height
         )
 
+    def open_file(self): 
+        self.scene = pyassimp.load('./models/OBJ/castle.obj')
+    
+    def gl_apply_render(self, node):
+        self.model = node.transformation.astype(numpy.float32)
+        
+        for mesh in node.meshes:
+            texture_surface = pygame.image.load("./models/OBJ/textures/Haus_C.jpg")
+            texture_data = pygame.image.tostring(texture_surface,"RGB",1)
+            
+            width = texture_surface.get_width()
+            height = texture_surface.get_height()
+            
+            texture = glGenTextures(1)
+            glBindTexture(GL_TEXTURE_2D, texture)
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, texture_data)
+            glGenerateMipmap(GL_TEXTURE_2D)
+            
+            vertex_data = numpy.hstack((
+                numpy.array(mesh.vertices, dtype=numpy.float32),
+                numpy.array(mesh.normals, dtype=numpy.float32),
+                numpy.array(mesh.texturecoords[0], dtype=numpy.float32)
+            ))
+            
+            faces = numpy.hstack(
+                numpy.array(mesh.faces, dtype=numpy.int32)
+            )
+
+            diffuse = mesh.material.properties["diffuse"]
+
+            self.gl_lashing(vertex_data,faces)
+            self.matrices_lashing(diffuse)
+            glDrawElements(
+                GL_TRIANGLES, 
+                len(faces), 
+                GL_UNSIGNED_INT, 
+                None
+            )
+
+        for child in node.children:
+            self.gl_apply_render(child)
+
+    def gl_lashing(self, vertex_data, faces): 
+        
         vertex_buffer_object = glGenVertexArrays(1)
         glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer_object)
         glBufferData(GL_ARRAY_BUFFER, vertex_data.nbytes, vertex_data, GL_STATIC_DRAW)
@@ -114,71 +104,94 @@ def glize(node):
         glVertexAttribPointer(2, 3, GL_FLOAT, False, 9 * 4, ctypes.c_void_p(6 * 4))
         glEnableVertexAttribArray(2)
 
-
         element_buffer_object = glGenBuffers(1)
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, element_buffer_object)
         glBufferData(GL_ELEMENT_ARRAY_BUFFER, faces.nbytes, faces, GL_STATIC_DRAW)
 
+    def matrices_lashing(self, diffuse): 
         glUniformMatrix4fv(
-            glGetUniformLocation(shader, "model"), 1 , GL_FALSE, 
-            model
-        )
-        glUniformMatrix4fv(
-            glGetUniformLocation(shader, "view"), 1 , GL_FALSE, 
-            glm.value_ptr(view)
-        )
-        glUniformMatrix4fv(
-            glGetUniformLocation(shader, "projection"), 1 , GL_FALSE, 
-            glm.value_ptr(projection)
+            glGetUniformLocation(self.active_shader, "model"), 
+            1 , 
+            GL_FALSE, 
+            self.model
         )
 
-        diffuse = mesh.material.properties["diffuse"]
+        glUniformMatrix4fv(
+            glGetUniformLocation(self.active_shader, "view"), 
+            1 , 
+            GL_FALSE, 
+            glm.value_ptr(self.view)
+        )
+        glUniformMatrix4fv(
+            glGetUniformLocation(self.active_shader, "projection"), 
+            1 , 
+            GL_FALSE, 
+            glm.value_ptr(self.projection)
+        )
 
         glUniform4f(
-            glGetUniformLocation(shader, "color"),
+            glGetUniformLocation(self.active_shader, "color"),
             *diffuse,
             1
         )
 
         glUniform4f(
-            glGetUniformLocation(shader, "light"), 
-            -100, 100, 100, 1
+            glGetUniformLocation(self.active_shader, "light"), 
+            -150, 
+            150, 
+            150, 
+            1
         )
 
-        glDrawElements(GL_TRIANGLES, len(faces), GL_UNSIGNED_INT, None)
+    def set_camera(self): 
+        self.camera = glm.vec3(0, 100, 180)
+        self.camera_speed = 50   
+        self.angle = 0 
 
 
-    for child in node.children:
-        glize(child)
+    def process_input(self):
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return True
+            if event.type == pygame.KEYUP and event.key == pygame.K_ESCAPE:
+                return True
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_LEFT:
+                    self.camera.x += self.camera_speed
+                    self.camera.z += self.camera_speed
+                if event.key == pygame.K_RIGHT:
+                    self.camera.x -= self.camera_speed
+                    self.camera.z -= self.camera_speed
+        return False
 
 
-camera = glm.vec3(0, 100, 180)
-camera_speed = 50
+if __name__ == '__main__': 
+    render = Render()
+    render.viewport_dimensions()
+    render.init_pygame()
+    render.get_shader()
+    render.get_matrixes()
+    render.open_file()
+    render.set_camera()
+    
+    done = False
+    
+    while not done:
+        glClear(
+            GL_COLOR_BUFFER_BIT | 
+            GL_DEPTH_BUFFER_BIT
+        )
+        
+        render.view = glm.lookAt(
+        render.camera, 
+        glm.vec3(0, 0, 0), 
+        glm.vec3(0, 1, 0)
+        )
+    
+        render.gl_apply_render(
+             render.scene.rootnode
+        )
 
-def process_input():
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            return True
-        if event.type == pygame.KEYUP and event.key == pygame.K_ESCAPE:
-            return True
-        if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_LEFT:
-                camera.x += camera_speed
-                camera.z += camera_speed
-            if event.key == pygame.K_RIGHT:
-                camera.x -= camera_speed
-                camera.z -= camera_speed
-    return False
-
-
-done = False
-while not done:
-    glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT)
-
-    view = glm.lookAt(camera, glm.vec3(0, 0, 0), glm.vec3(0, 1, 0))
-
-    glize(scene.rootnode)
-
-    done = process_input()
-    clock.tick(15)
-    pygame.display.flip()
+        done = render.process_input()
+        render.clock.tick(15)
+        pygame.display.flip()

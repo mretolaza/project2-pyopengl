@@ -57,7 +57,10 @@ class Render:
         self.model = node.transformation.astype(numpy.float32)
         
         for mesh in node.meshes:
-            texture_surface = pygame.image.load("./models/OBJ/textures/Haus_C.jpg")
+            material = dict(mesh.material.properties.items())
+            texture = material['file'][2:]
+
+            texture_surface = pygame.image.load("./models/OBJ/textures/Ha" + texture)
             texture_data = pygame.image.tostring(texture_surface,"RGB",1)
             
             width = texture_surface.get_width()
@@ -146,9 +149,10 @@ class Render:
         self.camera_speed = 180  
         self.angle = 0
 
-    def process_input(self, angle):
-        constant = 0.06 
+    def process_input(self, angle, camera_speed):
+        constant = 0.08 
         self.angle = angle 
+        self.camera_speed = camera_speed
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return True
@@ -164,25 +168,26 @@ class Render:
                     self.camera.x = self.camera_speed*math.cos(self.angle)
                     self.camera.z = self.camera_speed*math.sin(self.angle)
                 if event.key == pygame.K_UP: 
-                    if self.camera_speed<= 250: 
-                        self.camera_speed = 250 
+                    if (self.camera_speed<= 160): 
+                        self.camera_speed = 160
                     else: 
                         self.camera_speed = self.camera_speed - 10 
                         self.camera.x = self.camera_speed*math.cos(self.angle)
                         self.camera.z = self.camera_speed*math.sin(self.angle)
+                        print(self.camera_speed)
         
                 if event.key == pygame.K_DOWN: 
-                    if self.camera_speed >= 500: 
+                    if (self.camera_speed >= 500): 
                         self.camera_speed = 500 
                     else: 
                         self.camera_speed = self.camera_speed + 10 
                         self.camera.x = self.camera_speed*math.cos(self.angle)
                         self.camera.z = self.camera_speed*math.sin(self.angle)
-                        print(self.camera_speed)
+                        
 
                 
             
-        return False, self.angle
+        return False, self.angle, self.camera_speed
 
 if __name__ == '__main__': 
     render = Render()
@@ -195,7 +200,7 @@ if __name__ == '__main__':
     
     done = False
     render_angle = 0 
-    render_speed = 80
+    render_speed = 180
     
     while not done:
         glClear(
@@ -213,6 +218,6 @@ if __name__ == '__main__':
              render.scene.rootnode
         )
 
-        done, render_angle = render.process_input(render_angle)
+        done, render_angle, render_speed = render.process_input(render_angle, render_speed)
         render.clock.tick(15)
         pygame.display.flip()

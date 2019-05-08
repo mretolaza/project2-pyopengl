@@ -53,14 +53,22 @@ class Render:
     def open_file(self): 
         self.scene = pyassimp.load('./models/OBJ/castle.obj')
     
-    def gl_apply_render(self, node):
+    def select_texture(self, num): 
+        if num == 1: 
+            texture = "./models/OBJ/textures/Haus_C.jpg"
+        elif num == 2: 
+            texture = "./models/OBJ/textures/Haus_N.jpg"
+        else: 
+            texture = "./models/OBJ/textures/Haus_S.jpg"
+
+        return texture 
+
+    def gl_apply_render(self, node, type_texture):
         self.model = node.transformation.astype(numpy.float32)
         
         for mesh in node.meshes:
-            material = dict(mesh.material.properties.items())
-            texture = material['file'][2:]
 
-            texture_surface = pygame.image.load("./models/OBJ/textures/Ha" + texture)
+            texture_surface = pygame.image.load(self.select_texture(type_texture))
             texture_data = pygame.image.tostring(texture_surface,"RGB",1)
             
             width = texture_surface.get_width()
@@ -93,7 +101,7 @@ class Render:
             )
 
         for child in node.children:
-            self.gl_apply_render(child)
+            self.gl_apply_render(child, type_texture)
 
     def gl_lashing(self, vertex_data, faces): 
         
@@ -140,7 +148,7 @@ class Render:
             glGetUniformLocation(self.active_shader, "light"), 
             -150, 
             150, 
-            150, 
+            160, 
             1
         )
 
@@ -149,10 +157,11 @@ class Render:
         self.camera_speed = 180  
         self.angle = 0
 
-    def process_input(self, angle, camera_speed):
+    def process_input(self, angle, camera_speed, type_tex):
         constant = 0.08 
         self.angle = angle 
         self.camera_speed = camera_speed
+        type_tex = 1
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return True
@@ -183,11 +192,16 @@ class Render:
                         self.camera_speed = self.camera_speed + 10 
                         self.camera.x = self.camera_speed*math.cos(self.angle)
                         self.camera.z = self.camera_speed*math.sin(self.angle)
+                if event.key == pygame.K_a: 
+                    type_tex = 2 
+                if event.key == pygame.K_s: 
+                    type_tex = 3 
+
                         
 
                 
             
-        return False, self.angle, self.camera_speed
+        return False, self.angle, self.camera_speed, type_tex
 
 if __name__ == '__main__': 
     render = Render()
@@ -201,6 +215,7 @@ if __name__ == '__main__':
     done = False
     render_angle = 0 
     render_speed = 180
+    new_texture = 1
     
     while not done:
         glClear(
@@ -215,9 +230,15 @@ if __name__ == '__main__':
         )
     
         render.gl_apply_render(
-             render.scene.rootnode
+             render.scene.rootnode, 
+             type_texture = new_texture
         )
 
-        done, render_angle, render_speed = render.process_input(render_angle, render_speed)
+        done, render_angle, render_speed, new_texture = render.process_input(
+            render_angle, 
+            render_speed, 
+            new_texture
+        )
+
         render.clock.tick(15)
         pygame.display.flip()

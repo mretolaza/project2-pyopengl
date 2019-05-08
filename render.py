@@ -4,16 +4,17 @@ import OpenGL.GL.shaders as shaders
 import glm
 import pyassimp
 import numpy
+import math
 
 class Render: 
     def viewport_dimensions(self): 
-        self.viewport_height = 600
-        self.viewport_width = 800
+        self.viewport_height = 920
+        self.viewport_width = 1080
     
     def init_pygame(self): 
         pygame.init()
         pygame.display.set_mode(
-            (800, 600), 
+            (self.viewport_width, self.viewport_height), 
             pygame.OPENGL | pygame.DOUBLEBUF
         )
         self.clock = pygame.time.Clock()
@@ -115,7 +116,6 @@ class Render:
             GL_FALSE, 
             self.model
         )
-
         glUniformMatrix4fv(
             glGetUniformLocation(self.active_shader, "view"), 
             1 , 
@@ -128,13 +128,11 @@ class Render:
             GL_FALSE, 
             glm.value_ptr(self.projection)
         )
-
         glUniform4f(
             glGetUniformLocation(self.active_shader, "color"),
             *diffuse,
             1
         )
-
         glUniform4f(
             glGetUniformLocation(self.active_shader, "light"), 
             -150, 
@@ -145,11 +143,12 @@ class Render:
 
     def set_camera(self): 
         self.camera = glm.vec3(0, 100, 180)
-        self.camera_speed = 50   
-        self.angle = 0 
+        self.camera_speed = 180  
+        self.angle = 0
 
-
-    def process_input(self):
+    def process_input(self, angle):
+        constant = 0.06 
+        self.angle = angle 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return True
@@ -157,13 +156,33 @@ class Render:
                 return True
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_LEFT:
-                    self.camera.x += self.camera_speed
-                    self.camera.z += self.camera_speed
+                    self.angle = self.angle - constant 
+                    self.camera.x = self.camera_speed*math.cos(self.angle)
+                    self.camera.z = self.camera_speed*math.sin(self.angle) 
                 if event.key == pygame.K_RIGHT:
-                    self.camera.x -= self.camera_speed
-                    self.camera.z -= self.camera_speed
-        return False
+                    self.angle = self.angle + constant 
+                    self.camera.x = self.camera_speed*math.cos(self.angle)
+                    self.camera.z = self.camera_speed*math.sin(self.angle)
+                if event.key == pygame.K_UP: 
+                    if self.camera_speed<= 250: 
+                        self.camera_speed = 250 
+                    else: 
+                        self.camera_speed = self.camera_speed - 10 
+                        self.camera.x = self.camera_speed*math.cos(self.angle)
+                        self.camera.z = self.camera_speed*math.sin(self.angle)
+        
+                if event.key == pygame.K_DOWN: 
+                    if self.camera_speed >= 500: 
+                        self.camera_speed = 500 
+                    else: 
+                        self.camera_speed = self.camera_speed + 10 
+                        self.camera.x = self.camera_speed*math.cos(self.angle)
+                        self.camera.z = self.camera_speed*math.sin(self.angle)
+                        print(self.camera_speed)
 
+                
+            
+        return False, self.angle
 
 if __name__ == '__main__': 
     render = Render()
@@ -175,6 +194,8 @@ if __name__ == '__main__':
     render.set_camera()
     
     done = False
+    render_angle = 0 
+    render_speed = 80
     
     while not done:
         glClear(
@@ -192,6 +213,6 @@ if __name__ == '__main__':
              render.scene.rootnode
         )
 
-        done = render.process_input()
+        done, render_angle = render.process_input(render_angle)
         render.clock.tick(15)
         pygame.display.flip()

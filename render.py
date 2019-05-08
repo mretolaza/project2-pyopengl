@@ -196,11 +196,7 @@ class Render:
                     type_tex = 2 
                 if event.key == pygame.K_s: 
                     type_tex = 3 
-
-                        
-
-                
-            
+                      
         return False, self.angle, self.camera_speed, type_tex
 
 if __name__ == '__main__': 
